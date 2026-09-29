@@ -1,0 +1,16 @@
+# Binary / build artifacts
+*.exe
+*.zip
+*.db
+
+# Python cache
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Profile repo clone (not part of this project)
+zzzc874012-check/
+
+# OS files
+Thumbs.db
+.DS_Store
