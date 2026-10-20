@@ -1,0 +1,6 @@
+# 含 API 密钥，禁止提交
+config.ini
+
+# Python 缓存
+__pycache__/
+*.pyc

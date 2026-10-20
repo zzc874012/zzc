@@ -1,0 +1,29 @@
+%% Practice02/file_ops.py 代码架构图
+%% 可使用 mermaid.live、Typora、VSCode(Mermaid 插件) 等渲染
+flowchart TB
+    INI["config.ini"] --> CFG["configparser 配置加载<br/>API_KEY / BASE_URL / MODEL"]
+    CFG --> CHAT["chat(messages, depth)<br/>POST /chat/completions<br/>tools=TOOLS, stream=True"]
+
+    USER["用户"] -->|"input() 输入"| LOOP["主循环 __main__<br/>维护 messages 对话历史<br/>exit / quit 退出"]
+    LOOP -->|"追加 user 消息"| CHAT
+    CHAT -->|"无工具调用, 回复完成"| LOOP
+
+    CHAT --> SSE["SSE 流式解析<br/>iter_lines → data: JSON → delta"]
+    SSE -->|"delta.content 增量"| PRINT["逐字打印回复<br/>累积 full 文本"]
+    SSE -->|"delta.tool_calls 分片"| ACC["按 index 累积拼接<br/>id / name / arguments"]
+
+    ACC --> MSGAPP["追加 assistant 消息<br/>携带 tool_calls"]
+    MSGAPP --> EXEC["exec_tool(name, args)<br/>异常统一转换为错误字符串"]
+    EXEC --> GUARD["safe_path()<br/>commonpath 校验<br/>路径必须位于 WORKSPACE 内"]
+    GUARD --> IMPL["工具实现层(10 个函数)<br/>getCwd / listDir / getFileType / readFile<br/>createFile / editFile / createDir<br/>removeDir rmtree / removeFile / rename move"]
+    IMPL -->|"role=tool 结果消息"| CHAT
+
+    ACC -->|"工具执行完毕"| REC["递归续聊 chat(depth+1)<br/>达到 MAX_TOOL_ROUNDS=8 停止"]
+    REC --> CHAT
+
+    TOOLS["TOOLS 工具声明<br/>10 个 function JSON Schema"] -.->|"注册到 API 请求"| CHAT
+    TOOLS -.->|"函数名一一对应"| IMPL
+
+    WS["WORKSPACE<br/>启动时锁定的工作目录"] --> GUARD
+
+    LOOP -->|"exit / quit"| HIST["show_history()<br/>完整对话记录输出到终端"]
