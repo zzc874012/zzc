@@ -1,0 +1,162 @@
+zAgent 启动说明
+==================
+
+一、环境准备（只需执行一次）
+--------------------------------
+安装依赖：
+
+    pip install -r c:\Users\Lenovo\Desktop\LLM\Agent\zAgent\requirements.txt
+
+要求：Python 3.10 及以上。
+
+
+二、启动方式（推荐）
+--------------------------------
+从 LLM 根目录启动（技能 / MCP / AGENTS.md 全部能被发现）：
+
+    cd c:\Users\Lenovo\Desktop\LLM
+    python Agent\zAgent\main.py --ui tui --config Agent\zAgent\config.ini
+
+默认启动 TUI 界面。可选界面：
+
+    python Agent\zAgent\main.py --ui tui    TUI 界面（默认，浅色 GitHub Light 主题，左 Sidebar + 主聊天区）
+    python Agent\zAgent\main.py --ui cli    纯命令行对话界面
+    python Agent\zAgent\main.py --ui web    Web 界面，启动后浏览器访问 http://127.0.0.1:8000
+
+TUI 里 Sidebar 会实时显示：模型名称 / registry 工具数 / AGENTS.md 徽章 / 最近 3 个会话 / MCP servers 状态。
+状态栏实时刷新：当前 token 使用量 k / 窗口大小 k(默认或配置) · 百分比 · 就绪/思考中/出错。
+
+
+三、config.ini（首次启动自动生成模板）
+--------------------------------
+启动时如果当前目录没有 config.ini，程序会：
+    1. 在当前目录写一份带 mock api_key 的模板（含 [llm] [agent] [search] [compact] [session] [agents_md] 六段）
+    2. TUI 下弹 ModalScreen 提醒；CLI 下 stderr 打印指引
+    3. 退出码 3，提示用户修改后重启
+
+最小必填段（缺省其他段用代码里的常量兜底）：
+
+    [llm]
+    api_key = sk-replace-me           ← 必须改成你真实可用的
+    base_url = https://api.siliconflow.cn/v1
+    model = tencent/Hy4-preview
+
+常用可选段：
+
+    [agent]
+    workspace = c:/Users/Lenovo/Desktop/LLM   ← 文件操作允许的根目录
+    max_tool_rounds = 8
+    request_timeout = 120
+    # context_window_tokens = 131072          ← 注释掉则默认 128k
+
+    [compact]
+    threshold = 0.80                          ← 窗口使用量阈值
+    summary_target_tokens = 5000
+
+    [session]
+    store_dir = .agents/sessions              ← 会话快照存储目录
+    max_sessions = 50
+
+    [agents_md]
+    path = AGENTS.md                          ← 项目内指南文件，一次注入全程复用
+
+
+四、常用参数
+--------------------------------
+--ui tui|cli|web     界面类型，默认 tui
+--config 路径        配置文件路径，默认当前目录 config.ini
+--workspace 路径     允许文件操作的工作目录，默认当前目录
+--max-tool-rounds N  单轮对话最多工具调用轮数，默认读配置（8）
+--host / --port      Web 界面监听地址与端口，默认 127.0.0.1:8000
+
+
+五、斜杠命令（TUI / CLI 通用）
+--------------------------------
+在 TUI 里打 `/` 会弹出命令补全面板，实时过滤匹配：
+
+  /help       全部命令
+  /usage      token 使用量
+  /compact    手动压缩上下文（归档 + LLM 摘要替换）
+  /new        新建会话（当前会话先自动保存）
+  /save       手动保存会话快照
+  /list       列出历史会话
+  /resume     恢复会话；无参数 TUI 弹 ModalScreen 让你选，CLI 打印列表让你 /resume <编号>
+  /quit       保存会话 + 退出（别名 exit）
+  /clear      清空对话历史（不保存）
+  /agents     已加载 Skills 列表
+  /tools      当前所有 Function Calling 工具
+  /recall     全文检索归档（相当于直接调 recallContext）
+  /mcp        已连接 MCP servers & tools
+  /version    版本号
+
+另外，TUI 支持：
+  Ctrl+Q      退出
+  Ctrl+L      清空对话
+  Esc         取消本轮（后台 LLM / 工具调用会被中止）
+
+
+六、首次启动的行为概览
+--------------------------------
+1. 程序启动 → 读 config.ini → 组装 Agent
+2. SkillCatalog.discover() 扫描 skills/*/SKILL.md，只读 frontmatter 的 name/description，正文不读
+3. MCPClientManager 启动后台线程，读 .mcp.json，逐个 server 连接 + list_tools；UI 先出来
+4. 检查 AGENTS.md 存在 → 注入一条 system message 到 history 头部
+5. ToolRegistry 注册本地工具（FileOps / RunCli / WebSearch / Skill / Recall …）
+6. 界面渲染：Sidebar 左 / ChatLog 右 / 状态栏实时刷新 token / Input 带命令补全
+
+
+七、上下文压缩与历史归档
+--------------------------------
+当会话 token 使用量达到窗口的 80%（默认值，可改 [compact].threshold）：
+  - run_turn 拒绝普通输入，只放行 /compact
+  - TUI 状态栏加 ⚠ 标记，toast 提醒
+
+手动执行 /compact：
+  1. 归档原始 history 到 .agents/context/<YYYYMMDD-HHMMSS>.jsonl（完整保留所有 message）
+  2. 调 LLM（tools=[] 强制纯文本）生成约 summary_target_tokens 的 Markdown 摘要
+  3. 成功 → 用两条消息替换 history：一条 system（摘要） + 一条 assistant（归档编号 + recallContext 指引）
+  4. 失败 → history 不变，抛 LLMError
+
+LLM 在压缩摘要里发现缺细节时，可以主动调 recallContext 工具检索 .agents/context/ 下的原始记录。
+
+
+八、退出
+--------------------------------
+CLI 界面：输入 exit 或 quit
+TUI 界面：Ctrl+Q，或直接点窗口关闭按钮
+
+退出前如果 session.store_dir 非空且 history 非空，Agent 会自动保存当前会话快照到 .agents/sessions/。
+
+
+九、常见问题
+--------------------------------
+1. 报"配置文件不存在"
+   当前目录下没有 config.ini → 程序会自动生成模板 + 弹窗 / stderr 提示。
+   如果想显式指定路径，加 --config：
+   --config c:\Users\Lenovo\Desktop\LLM\Agent\zAgent\config.ini
+
+2. 技能没有生效（LLM 不认识 loadSkill）
+   确认是从 c:\Users\Lenovo\Desktop\LLM 目录启动的，
+   且 skills\<技能名>\SKILL.md 顶部 Frontmatter 中有 name 和 description 字段。
+   TUI 里 /agents 可查看已发现的技能。
+
+3. MCP server 连接失败
+   看 TUI Sidebar 的 MCP 区域（或 /mcp 命令）会显示具体 last_error。
+   单个 server 失败不影响其他 server 和本地工具。
+
+4. token 一直涨，LLM 说它看不到之前的对话
+   执行 /compact。压缩后 history 会变成摘要 + 归档说明。
+   LLM 如需细节会自动调 recallContext 检索原始记录。
+
+5. 想恢复之前关闭的会话
+   /list 先看有哪些会话，/resume <编号或 session_id> 恢复。
+   TUI 里直接 /resume 会弹 ModalScreen 让你上下键选。
+
+
+十、项目运行时动态生成的目录
+--------------------------------
+<项目根目录>/skills/                    用户放的 Skill 目录（每个子目录 + SKILL.md）
+<项目根目录>/.mcp.json                  MCP Server 连接配置（可选）
+<项目根目录>/AGENTS.md                  项目指南（可选，一次注入全程复用）
+<项目根目录>/.agents/context/           压缩前的原始消息归档（.jsonl）
+<项目根目录>/.agents/sessions/          会话快照（.json，自动保存 / /resume 用）

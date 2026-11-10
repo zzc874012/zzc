@@ -1,0 +1,36 @@
+%% zAgent 分层架构
+%% 渲染：mermaid.live / Typora / VSCode Mermaid 插件
+flowchart TB
+    subgraph IF["interfaces 界面适配层"]
+        TUI["interfaces/tui<br/>Textual App + Widgets + CSS"]
+        CLI["interfaces/cli<br/>ConsoleListener"]
+        FUTURE["未来：web / desktop<br/>只需实现 EventListener"]
+    end
+
+    subgraph CORE["core 业务核心层（不依赖任何界面框架）"]
+        AGENT["agent.Agent<br/>多轮对话 + 工具编排 + 取消"]
+        EVENTS["events<br/>TurnStarted / TextDelta / ToolCall*<br/>TurnCompleted / TurnAborted / ErrorRaised"]
+        CONFIG["config<br/>AppConfig / LLMSettings / AgentSettings"]
+        LLM["llm<br/>LLMClient 协议 + OpenAICompatibleClient"]
+        TOOLS["tools<br/>ToolRegistry + FileOpsToolset"]
+        WS["Workspace<br/>路径沙箱 commonpath 校验"]
+    end
+
+    BOOT["bootstrap.py / main.py<br/>参数解析 + 选择界面"]
+    INI[("config.ini")]
+
+    BOOT --> CONFIG
+    BOOT -->|"--ui tui"| TUI
+    BOOT -->|"--ui cli"| CLI
+    TUI -->|"build_agent(config)"| AGENT
+    CLI -->|"build_agent(config)"| AGENT
+    AGENT --> LLM
+    AGENT --> TOOLS
+    AGENT -->|"emit AgentEvent"| EVENTS
+    EVENTS -->|"on_event（后台线程桥接）"| TUI
+    EVENTS -->|"on_event（同步打印）"| CLI
+    FUTURE -.->|"实现 EventListener"| EVENTS
+    TOOLS --> WS
+    CONFIG --> INI
+
+    AGENT -.->|"读取工作目录 / 轮数上限"| CONFIG

@@ -1,0 +1,104 @@
+示例 .mcp.json 配置
+====================
+
+放在项目根目录（启动 Agent 时的当前目录），文件名固定为 .mcp.json。
+启动时 Agent 会读取其中 servers 字段，逐个连接；某个 server 连接失败不会影响其他 server 和本地工具。
+
+代码兼容两种键名：servers（推荐）和 mcpServers（MCP 生态常见别名）。
+
+URL / command 字符串首尾被意外包裹的反引号、单双引号会自动剥离，
+不需要你在 .mcp.json 里手工清理。
+
+--------------------------------------------------------------------------------
+示例 1：连接一个远程 Streamable HTTP MCP Server（最常见）
+--------------------------------------------------------------------------------
+{
+  "servers": {
+    "web-fetch": {
+      "type": "streamableHttp",
+      "url": "https://mcp.example.com/v1/web-fetch",
+      "headers": {
+        "Authorization": "Bearer sk-your-token-here"
+      },
+      "timeout_seconds": 20
+    }
+  }
+}
+
+说明：
+- type 可选 "streamableHttp" / "http" / "streamable_http"（等价），或 "stdio"
+- url 必填；headers / timeout_seconds 可选
+- 连接成功后，web-fetch 暴露的工具会被注册进 Agent，LLM 直接按 MCP 原生名称调用
+- TUI Sidebar 异步加载完会自动刷新 MCP 区域并追加工具；/mcp 命令也能看到
+- 工具描述里会带【MCP Server: xxx(type)】前缀以便区分来源
+
+--------------------------------------------------------------------------------
+示例 2：启动一个本地 stdio MCP Server
+--------------------------------------------------------------------------------
+{
+  "servers": {
+    "local-json-tools": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "."],
+      "env": {
+        "DEBUG": "mcp:*"
+      }
+    }
+  }
+}
+
+说明：
+- stdio 启动一个子进程，MCP SDK 会用其 stdin/stdout 传 JSON-RPC
+- command 必填；args / env 可选，env 会合并当前环境变量
+- Windows 下若要以 Python 脚本为 server，写 command: "python", args: ["-m", "server_module"]
+
+--------------------------------------------------------------------------------
+示例 3：同时连多个 server，冲突工具名自动加前缀
+--------------------------------------------------------------------------------
+{
+  "servers": {
+    "alice-ops": {
+      "type": "streamableHttp",
+      "url": "https://alice.internal/mcp/ops"
+    },
+    "bob-ops": {
+      "type": "streamableHttp",
+      "url": "https://bob.internal/mcp/ops"
+    }
+  }
+}
+
+若两个 server 都提供名为 "restart-service" 的工具，暴露给 LLM 的名称会自动变成：
+- "alice-ops__restart-service"
+- "bob-ops__restart-service"
+
+（名字里的非法字符会被替换成下划线，所以推荐用小写 + 连字符命名 server）
+
+--------------------------------------------------------------------------------
+示例 4：用 mcpServers 键名的写法（兼容）
+--------------------------------------------------------------------------------
+{
+  "mcpServers": {
+    "Bazi-MCP": {
+      "type": "streamableHttp",
+      "url": "https://mcp.api-inference.modelscope.net/YOUR_MODELSCOPE_ENDPOINT_ID/mcp"
+    }
+  }
+}
+
+这种写法也能被识别，跟 servers 完全等价。Bazi-MCP 会暴露三个工具：
+getBaziDetail / getSolarTimes / getChineseCalendar。
+
+--------------------------------------------------------------------------------
+说明
+--------------------------------------------------------------------------------
+- 连接失败 / list_tools 报错：该 server 记录 last_error，不注册任何工具，
+  Agent 正常启动，其他 server 和本地工具继续工作
+- .mcp.json JSON 语法错误：Agent 降级为空 manager 继续启动
+- call_tool 执行失败（MCP Server 返回 is_error=true 或 timeout）：
+  ToolRegistry 会把错误消息塞进 ToolResult.ok=False，LLM 看到的是完整可行动文本
+- 后台加载 + 异步刷新：Agent.__init__ 启动一个 threading.Thread 跑
+  MCPClientManager.load()，主线程立即返回让 TUI 先出来；TUI 每秒轮询 mcp_status，
+  加载完后自动调 refresh_tools_from_mcp() 追加工具（自动跳过与现有工具重名的）
+- 依赖：mcp >= 1.8、httpx >= 0.28（已写入 requirements.txt）

@@ -1,0 +1,229 @@
+================================================================================
+  zAgent 项目文件结构与职责说明
+  更新日期：2026-11-04
+================================================================================
+
+
+一、目录一眼看懂
+────────────────────────────────────────
+
+Agent/
+├── Practice01/          练习一：入门版 CLI 对话骨架
+├── Practice02/          练习二：带文件操作的 Agent 雏形
+├── .gitignore           Git 忽略规则
+└── zAgent/              ★ 完整工程
+    ├── bootstrap.py       ★★★ 统一入口（参数解析 → 分流到界面；无 config.ini 时自动生成模板）
+    ├── main.py            python main.py 启动（只调 bootstrap.main）
+    ├── __main__.py        python -m zAgent 启动
+    ├── requirements.txt   依赖列表
+    │
+    ├── core/              ★★★ 核心引擎（与界面无关，全部功能迭代在此）
+    │   ├── __init__.py       统一对外 API（界面层只 import 这里）
+    │   ├── agent.py          Agent 编排层：run_turn 对话循环、工具调用、
+    │   │                     阈值拦截、AGENTS.md 注入、MCP 异步加载钩子、
+    │   │                     自动 session save
+    │   ├── config.py         读 config.ini → AppConfig；所有硬编码参数外部化
+    │   ├── events.py         事件类型（对话开始 / AI 输出 / 工具调用 / 错误 …）
+    │   ├── messages.py       ChatMessage 构造函数（user / assistant / system / tool）
+    │   ├── llm/              LLM 抽象层（可换供应商）
+    │   │   ├── base.py         抽象接口 LLMClient + StreamChunk
+    │   │   └── openai_compat.py  OpenAI 兼容协议实现（stream_chat + tools schema）
+    │   ├── context.py        ★ token 估算 + .agents/context/ JSONL 归档 + 关键词检索
+    │   ├── compact.py        ★ 上下文压缩：LLM 生成摘要、失败回滚、归档 + 替换
+    │   ├── sessions.py      ★ 会话持久化：.agents/sessions/*.json 快照，list/save/load
+    │   ├── skills.py         ★ Skills 发现：扫描 skills/*/SKILL.md 只读 frontmatter
+    │   ├── commands.py       ★ 斜杠命令注册表：/compact /new /save /resume …
+    │   ├── mcp_client.py     ★ MCP 客户端：stdio / streamable_http 连接、tools 前缀化
+    │   └── tools/            ★★★ 工具层（给 AI 用的工具箱）
+    │       ├── base.py         Tool / ToolRegistry 抽象；工具注册 / 查找 / 执行
+    │       ├── file_ops.py     FileOpsToolset：10 个文件系统工具
+    │       ├── cli_tool.py     RunCliToolset：RunCli 本地命令行工具
+    │       ├── web_search.py   WebSearchToolset：searchWeb 百度千帆搜索
+    │       ├── skill_tool.py   SkillToolset：loadSkill + createSkill Function Calling
+    │       ├── recall_tool.py  RecallToolset：recallContext 全文检索归档
+    │       └── mcp_toolset.py  MCPToolset：把 MCP 动态工具映射成 ToolRegistry 工具
+    │
+    ├── interfaces/        ★ 界面层（只负责显示和收输入，所有功能都走 core）
+    │   ├── cli.py           命令行对话界面（与 TUI 共用 commands.dispatch）
+    │   └── tui/             Textual 富文本界面（默认）
+    │       ├── __init__.py   run_tui() 入口
+    │       ├── app.py        ZAgentApp 主应用：Sidebar + 主区 chat + 命令补全 + ModalScreen
+    │       ├── widgets.py    ChatLog / MessageBubble / StatusBar 自定义组件
+    │       └── app.tcss      ★★★ 浅色主题样式表（GitHub Light 风格）
+    │
+    └── 说明文件/
+        ├── 文件结构与职责说明.txt   ← 本文件
+        ├── 启动说明.txt             ← 新手启动步骤 + 常见问题
+        └── .mcp.json 示例.txt       ← MCP Server 连接配置示例
+
+
+项目根目录（启动时的 cwd）下还会动态出现：
+    skills/                 用户自己放的技能目录（每个 skill 一个子目录 + SKILL.md）
+    .agents/context/        上下文压缩归档（.jsonl，按时间戳命名）
+    .agents/sessions/       会话快照（.json，按时间戳命名）
+    .mcp.json               MCP Server 连接配置（可选）
+    AGENTS.md               项目指南（可选，一次注入全程复用）
+    config.ini              LLM 配置（必需；首次启动会自动生成模板）
+
+
+二、每个文件一句话：干什么的 + 什么时候打开
+────────────────────────────────────────
+
+【启动层】—— 三种方式，最终都调 bootstrap.main()
+  main.py / __main__.py     只起个壳，你几乎不会打开它们
+  bootstrap.py  ★★★       想改启动参数、加新界面、加 config.ini 自动模板时必看
+  __init__.py               包标记，空的
+
+【核心引擎 core/】—— AI 怎么跟 LLM 和工具交互的
+  agent.py  ★★★            最核心。run_turn() 就是"AI 怎么循环调用工具"的全部逻辑；
+                            还负责：AGENTS.md 注入、MCP 后台异步加载、阈值拦截、自动 session save
+  config.py                 加新配置段、改默认值、调整外部化范围时打开
+  events.py                 加新的事件类型时打开
+  messages.py               确认发给 LLM 的消息格式时看
+  llm/base.py               想加新的 LLM 供应商时参照这个接口写
+  llm/openai_compat.py      改 API endpoint、调超时时打开
+  context.py  ★★           改 token 估算系数、调整归档路径时看
+  compact.py  ★★           换压缩 prompt、改 summary 目标 token 数时打开
+  sessions.py  ★           改会话存储路径 / 上限 / 序列化格式时打开
+  skills.py  ★★            改 Skill 发现规则（frontmatter 解析）、SKILL.md 校验时打开
+  commands.py  ★★          加新斜杠命令、改命令别名时打开
+  mcp_client.py  ★★        改 MCP 传输层、工具名前缀化策略时打开
+
+【工具层 core/tools/】—— 给 AI 用的工具箱
+  tools/base.py  ★★★       想理解"工具怎么注册、怎么被 AI 调"时看这个
+  tools/file_ops.py         加新文件工具、改路径安全策略时打开
+  tools/cli_tool.py  ★★     RunCli 工具。改超时、改输出截断、加白名单时打开
+  tools/web_search.py       换搜索供应商时打开
+  tools/skill_tool.py      loadSkill / createSkill 工具：改路径匹配策略、改名称格式校验时打开
+  tools/recall_tool.py     recallContext 工具：改关键词检索参数（窗口大小、max_results）时打开
+  tools/mcp_toolset.py     MCP 动态工具桥接：改工具描述前缀、改注册时的冲突处理时打开
+
+【界面层 interfaces/】—— 只负责"怎么显示给人看"
+  cli.py  ★★               跑起来看效果最直接。改终端输出格式、改 prompt 时打开
+  tui/app.py  ★★★          改 Sidebar 布局、加新 ModalScreen、改命令补全面板、
+                            调整 MCP 异步刷新间隔时打开
+  tui/widgets.py            改 ChatLog / Bubble / StatusBar 组件行为时打开
+  tui/app.tcss  ★★★        改 TUI 配色、字体、控件样式时打开（浅色主题全在这里）
+
+【配置 & 依赖】
+  config.ini  ★★           跑之前必看。填 api_key、换 model、调 max_tool_rounds
+                            新增段：[compact] [session] [agents_md]（缺省全部用默认值）
+  requirements.txt          加了第三方库（mcp / httpx 等）后记得更新这里
+  .mcp.json  ★★            放项目根目录。配置 MCP servers；支持 servers / mcpServers 两种键名
+
+
+三、修改频率总结
+────────────────────────────────────────
+
+🔥 高频（功能迭代必碰）
+  bootstrap.py        加新启动参数 / 新界面
+  core/agent.py       Agent 编排逻辑 / 注册新工具 / 改阈值
+  core/tools/*.py     加新工具 / 改工具行为
+  core/tools/__init__.py  新工具注册时加一行 import
+  core/commands.py    加新斜杠命令
+  config.ini          换模型 / 调参数 / 填密钥
+
+⚡ 中频（偶尔碰）
+  core/mcp_client.py  改 MCP 传输层
+  core/compact.py     换压缩 prompt / 调 summary 目标
+  core/context.py     改 token 估算系数 / 归档路径
+  core/skills.py      改 Skill frontmatter 解析规则
+  core/config.py      加新配置段
+  interfaces/cli.py / tui/  改界面布局 / 样式
+
+💤 几乎不动（定义好就稳定）
+  events.py / messages.py     数据结构
+  llm/base.py / tools/base.py 抽象接口
+  所有 __init__.py            包标记
+
+
+四、怎么跑起来
+────────────────────────────────────────
+
+cd C:\Users\Lenovo\Desktop\LLM
+python Agent\zAgent\main.py --ui tui --config Agent\zAgent\config.ini
+
+（推荐从 LLM 根目录启动，这样 skills/ .agents/ .mcp.json AGENTS.md 都能被发现）
+
+默认启动 TUI 界面。可选界面：
+    python Agent\zAgent\main.py --ui tui    TUI 富文本界面（默认，浅色主题）
+    python Agent\zAgent\main.py --ui cli    纯命令行对话界面
+    python Agent\zAgent\main.py --ui web    Web 界面，浏览器访问 http://127.0.0.1:8000
+
+首次启动时如果 config.ini 不存在，程序会：
+    1. 在当前目录写一份带 mock api_key 的模板
+    2. TUI 下弹 ModalScreen 提醒；CLI 下 stderr 打印指引
+    3. 退出码 3，提示用户修改后重启
+
+可选参数：
+  --ui tui|cli|web     界面类型，默认 tui
+  --config PATH        指定配置文件，默认当前目录 config.ini
+  --workspace PATH     文件工具允许操作的根目录，默认当前目录
+  --max-tool-rounds N  单轮对话最多工具调用次数，默认读配置（8）
+  --host / --port      Web 界面监听地址与端口，默认 127.0.0.1:8000
+
+斜杠命令（TUI / CLI 通用）：
+  /help    全部命令
+  /usage   token 使用量
+  /compact 手动压缩上下文（归档 + LLM 摘要替换）
+  /new     新建会话（当前会话先自动保存）
+  /save    手动保存会话快照
+  /list    列出历史会话
+  /resume  恢复会话（无参数 TUI 弹 ModalScreen 让你选）
+  /quit    保存会话 + 退出（别名 exit）
+  /clear   清空对话历史（不保存）
+  /agents  已加载 Skills 列表
+  /tools   当前所有 Function Calling 工具
+  /recall  全文检索归档（相当于调 recallContext）
+  /mcp     已连接 MCP servers & tools
+  /version 版本号
+
+CLI 里输入 exit 或 quit 也能退出。
+
+
+五、架构分层图（谁调谁）
+────────────────────────────────────────
+
+用户键盘/鼠标
+    │
+    ▼
+┌──────────────────────────────────────┐
+│ interfaces/ 界面层                   │
+│ 收输入 → 调 commands.dispatch        │
+│  /斜杠命令 路由到 core/commands.py   │
+│  普通对话 → agent.run_turn(prompt)  │
+└──────────────┬───────────────────────┘
+               │
+               ▼
+┌──────────────────────────────────────┐
+│ core/agent.py 编排层 ★★★              │
+│ run_turn() 做的事：                  │
+│ 0. 检查 80% token 阈值 → 拒绝输入    │
+│ 1. 发 LLM → 收 AI 回复               │
+│ 2. AI 如果想调工具 → ToolRegistry    │
+│ 3. 把工具结果再发回 LLM              │
+│ 4. 循环直到 AI 不再调工具            │
+│ 5. 返回最终文本 + 自动 session save  │
+└──┬──────┬──────┬──────┬──────┬────────┘
+   │      │      │      │      │
+┌──┴──┐┌──┴──┐┌──┴──┐┌──┴──┐┌──┴────────┐
+│ LLM ││tools││skills││ MCP ││  sessions │
+│Cli  ││Reg  ││     ││Man  ││  AGENTS.md │
+│     ││     ││     ││     ││  compact   │
+└─────┘└─────┘└─────┘└─────┘└────────────┘
+
+Agent 启动时（后台线程，不阻塞 UI）：
+  1. SkillCatalog.discover() 扫 skills/*/SKILL.md，只读 frontmatter
+  2. MCPClientManager.load() 读 .mcp.json，逐个 server 连接 + list_tools
+  3. _inject_agents_md_once() 读 AGENTS.md，塞一条 system message 到 history 头
+  4. ToolRegistry 注册 FileOps / RunCli / WebSearch / Skill / Recall / MCP 工具
+  5. 界面先出来，mcp_status 每秒轮询，加载完后自动追加 MCP 工具
+
+context 达到阈值（默认 80% 窗口）时：
+  1. run_turn 拒绝普通输入（放行 /compact）
+  2. 用户执行 /compact：归档 → LLM 生成摘要 → 替换 history → 新建 session_id
+
+
+================================================================================
+  说明文件 完
+================================================================================

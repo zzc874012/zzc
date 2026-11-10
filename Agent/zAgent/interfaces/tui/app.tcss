@@ -1,0 +1,313 @@
+/* =========================================================================
+   zAgent TUI — 浅色主题（GitHub Light 风格）
+   所有 Textual 8 内置控件会自动跟随当前主题变量；
+   这里主要覆盖我们自定义的 Bubble / Sidebar / StatusBar / Input / 补全面板 / ModalScreen。
+   ========================================================================= */
+
+Screen {
+    layout: vertical;
+    background: #ffffff;
+    color: #24292f;
+}
+
+/* ---------- Header / Footer ---------- */
+Header {
+    background: #f6f8fa;
+    color: #24292f;
+    border-bottom: solid #d0d7de;
+}
+
+HeaderTitle {
+    color: #24292f;
+    text-style: bold;
+}
+
+HeaderStatic {
+    color: #57606a;
+}
+
+Footer {
+    background: #f6f8fa;
+    color: #57606a;
+    border-top: solid #d0d7de;
+}
+
+FooterKey {
+    color: #0969da;
+}
+
+FooterDescription {
+    color: #57606a;
+}
+
+/* ---------- 主区 / Sidebar ---------- */
+Horizontal {
+    height: 1fr;
+}
+
+#sidebar {
+    width: 34;
+    height: 100%;
+    padding: 1 2;
+    background: #f6f8fa;
+    border-right: solid #d0d7de;
+}
+
+#sb-title {
+    text-style: bold;
+    color: #24292f;
+    border-bottom: solid #d0d7de;
+    width: 100%;
+    padding: 0 0 1 0;
+    margin: 0 0 1 0;
+}
+
+#sb-model,
+#sb-agents,
+#sb-sessions-label,
+#sb-mcp-placeholder,
+#sb-empty {
+    width: 100%;
+    margin: 0 0 1 0;
+    color: #57606a;
+    text-style: dim;
+}
+
+#main {
+    width: 1fr;
+    height: 100%;
+}
+
+/* ---------- ChatLog / Bubbles ---------- */
+#chat {
+    height: 1fr;
+    padding: 1 2;
+    background: #ffffff;
+}
+
+.bubble {
+    height: auto;
+    width: 100%;
+    margin: 0 0 1 0;
+    padding: 0 1;
+    background: #f6f8fa;
+    border-left: solid #d0d7de;
+    }
+
+.bubble-title {
+    height: 1;
+    text-style: bold;
+    color: #57606a;
+    text-style: dim;
+}
+
+.bubble-body {
+    height: auto;
+    color: #24292f;
+}
+
+/* user：左蓝边 */
+.bubble.user {
+    border-left: solid #0969da;
+    background: #ddf4ff;
+}
+.bubble.user .bubble-title {
+    color: #0969da;
+}
+
+/* assistant：左绿边 */
+.bubble.assistant {
+    border-left: solid #1a7f37;
+    background: #ddfbe4;
+}
+.bubble.assistant .bubble-title {
+    color: #1a7f37;
+}
+
+/* tool：左金边 */
+.bubble.tool {
+    border-left: solid #9a6700;
+    background: #fff8c5;
+}
+.bubble.tool .bubble-title {
+    color: #9a6700;
+}
+
+/* warning */
+.bubble.warning {
+    border-left: solid #9a6700;
+    background: #fff8c5;
+}
+.bubble.warning .bubble-title {
+    color: #9a6700;
+}
+
+/* error */
+.bubble.error {
+    border-left: solid #cf222e;
+    background: #ffebe9;
+}
+.bubble.error .bubble-title {
+    color: #cf222e;
+}
+
+/* system */
+.bubble.system {
+    border-left: solid #57606a;
+    background: #f6f8fa;
+}
+.bubble.system .bubble-title {
+    color: #57606a;
+}
+
+/* ---------- StatusBar ---------- */
+#status {
+    height: 1;
+    padding: 0 2;
+    background: #f6f8fa;
+    color: #57606a;
+    border-top: solid #d0d7de;
+    text-style: dim;
+}
+
+#status.busy {
+    color: #9a6700;
+}
+
+#status.error {
+    color: #cf222e;
+}
+
+/* ---------- Input ---------- */
+#prompt {
+    height: 3;
+    margin: 0 2 1 2;
+    padding: 0 1;
+    border: round #d0d7de;
+    background: #ffffff;
+    color: #24292f;
+}
+
+#prompt:focus {
+    border: round #0969da;
+    background: #ffffff;
+}
+
+/* ---------- 命令补全面板 ---------- */
+#completions {
+    margin: 0 3 1 3;
+    padding: 0 2;
+    background: #f6f8fa;
+    color: #0969da;
+    border: round #d0d7de;
+    text-style: dim;
+    height: 1;
+    display: none;
+}
+
+#completions.visible {
+    display: block;
+}
+
+/* ---------- Resume ModalScreen ---------- */
+ModalScreen {
+    background: rgba(36, 41, 47, 0.35);
+}
+
+#resume-dialog {
+    width: 70;
+    height: auto;
+    padding: 1 2;
+    background: #ffffff;
+    border: thick #d0d7de;
+    margin: 2;
+}
+
+#resume-title {
+    text-style: bold;
+    color: #24292f;
+    border-bottom: solid #d0d7de;
+    padding: 0 0 1 0;
+    margin: 0 0 1 0;
+}
+
+#resume-list {
+    width: 100%;
+    height: 15;
+    background: #ffffff;
+    border: solid #d0d7de;
+    color: #24292f;
+}
+
+#resume-list > .list-item--highlighted {
+    background: #ddf4ff;
+    color: #0969da;
+}
+
+#resume-cancel {
+    dock: bottom;
+    width: 100%;
+    margin-top: 1;
+}
+
+/* ---------- TUI 内置控件主题覆盖 ---------- */
+/* Textual 8 默认深色 Dialog/Button 色值过深，覆盖浅色版本 */
+Button {
+    background: #f6f8fa;
+    color: #24292f;
+    border: solid #d0d7de;
+}
+
+Button:hover {
+    background: #ddf4ff;
+    color: #0969da;
+    border: solid #0969da;
+}
+
+Button.variant-primary {
+    background: #0969da;
+    color: #ffffff;
+    border: solid #0969da;
+}
+
+Button.variant-primary:hover {
+    background: #0550ae;
+}
+
+Button.variant-error {
+    background: #cf222e;
+    color: #ffffff;
+    border: solid #cf222e;
+}
+
+Button.variant-error:hover {
+    background: #a40e26;
+}
+
+/* Scrollbar — 让 Textual 内置滚动条跟浅色主题匹配 */
+ScrollBar {
+    background: transparent;
+    color: #d0d7de;
+}
+
+ScrollBar > .scrollbar--button {
+    background: transparent;
+    color: #57606a;
+}
+
+ScrollBar > .scrollbar--slider {
+    background: #c6cbd1;
+}
+
+/* Collapsible（如果后续 MCP server 卡片改用可折叠） */
+Collapsible {
+    background: #f6f8fa;
+    color: #24292f;
+    border: solid #d0d7de;
+    margin: 0 0 1 0;
+}
+
+CollapsibleTitle {
+    text-style: bold;
+    color: #24292f;
+}

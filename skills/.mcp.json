@@ -1,0 +1,8 @@
+{
+  "servers": {
+    "Bazi-MCP": {
+      "type": "streamableHttp",
+      "url": "https://mcp.api-inference.modelscope.net/YOUR_MODELSCOPE_ENDPOINT_ID/mcp"
+    }
+  }
+}
